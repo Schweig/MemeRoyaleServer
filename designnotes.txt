@@ -1,0 +1,6 @@
+scrap mongo for sql the autoincrement and ordered data is too important to a feed type system. donezo
+
+innodb cluster buggy for dev
+
+user mysql system templates also donezo
+
