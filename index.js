@@ -95,6 +95,9 @@ app.post('/signup', async (req, res) => {
   const username = req.body.username;
   const email = req.body.email;
   const birthday = req.body.birthday;
+  if (req.body.password.length < 6) {
+    return res.status(400).send('Password too short');
+  }
   const hash = crypto
       .createHash('sha256')
       .update(req.body.password)
@@ -143,13 +146,14 @@ app.post('/vote', async (req, res) => {
         `insert into vote (post,voter,type,created_at) Values(?,?,?,now()) on duplicate key update type = ${type}`,
         [post, user.userid, type],
     );
-    res.sendStatus(200);
+    res.status(200).send(`{"result":"vote succeeded"}`);
   } catch (e) {
     res.sendStatus(500);
   }
 });
 
 app.get('/top', async (req, res) => {
+  console.log('getting top')
   try {
     const [
       val,
