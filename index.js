@@ -9,6 +9,7 @@ const path = require('path');
 const admin = require('firebase-admin');
 const serviceAccount = require('./memetinder-f03bf-firebase-adminsdk-x40tp-241a513d14.json');
 const mysql = require('mysql2/promise');
+const tokenKey = 'johndenverfucks';
 const pool = mysql.createPool({
   host: 'localhost',
   user: 'memeroyale',
@@ -75,7 +76,7 @@ app.post('/auth', async (req, res) => {
     const pass = row.password;
     if (pass === hash) {
       delete user.password;
-      const token = jwt.sign(user, 'johndenverfucks');
+      const token = jwt.sign(user, tokenKey);
       res.send({token: token});
     } else {
       res
@@ -111,17 +112,28 @@ app.post('/signup', async (req, res) => {
         [username, email, hash, birthday],
     );
     const user = {userid: val.insertId, username, email, birthday};
-    const token = jwt.sign(user, 'johndenverfucks');
+    const token = jwt.sign(user, tokenKey);
     return res.send(token);
   } catch (err) {
     console.log(err);
     return res.sendStatus(409);
   }
 });
-
+app.post('/profile/me', async (req, res) => {
+  const token = req.body.user;
+  const user = jwt.verify(token, tokenKey);
+  try {
+    const [val, fields] = await pool.execute('select * from user where ID =?', [
+      user.userid,
+    ]);
+    res.send(val);
+  } catch (e) {
+    res.sendStatus(500);
+  }
+});
 app.post('/feed', async (req, res) => {
   const token = req.body.user;
-  const user = jwt.verify(token, 'johndenverfucks');
+  const user = jwt.verify(token, tokenKey);
   try {
     const [
       val,
@@ -138,7 +150,7 @@ app.post('/feed', async (req, res) => {
 
 app.post('/vote', async (req, res) => {
   const token = req.body.user;
-  const user = jwt.verify(token, 'johndenverfucks');
+  const user = jwt.verify(token, tokenKey);
   const post = req.body.post;
   const type = req.body.type;
   try {
@@ -153,12 +165,11 @@ app.post('/vote', async (req, res) => {
 });
 
 app.get('/top', async (req, res) => {
-  console.log('getting top')
   try {
     const [
       val,
       fields,
-    ] = await pool.execute(`SELECT post, title,description, SUM(type) as total,username 
+    ] = await pool.execute(`SELECT post, title,description,link, SUM(type) as total,username 
     FROM vote,post,user where vote.post = post.ID and poster = user.id
     GROUP BY post,title,description,username order by total desc limit 25;`);
     res.send(val);
@@ -166,7 +177,31 @@ app.get('/top', async (req, res) => {
     res.sendStatus(500);
   }
 });
-
+app.get('/profile/:userid', async (req, res) => {
+  const userid = req.params.userid;
+  const [
+    val,
+    fields,
+  ] = await pool.execute(
+      `Select id,username,level,picture from user where id = ?`,
+      [userid],
+  );
+  res.send(val);
+});
+app.post('/profile/update', async (req, res)=>{
+  // TODO: more thought needs to go into this. need to validate the data before updating.
+  const token = req.body.user;
+  const user = jwt.verify(token, tokenKey);
+  const [val, fields] = await pool.execute('');
+});
+app.get('/posts/:userid', async (req, res) => {
+  const userid = req.params.userid;
+  const [val, fields] = await pool.execute(
+      'select * from post where poster =?',
+      [userid],
+  );
+  res.send(val);
+});
 app.post(
     '/upload',
     upload.single('file' /* name attribute of <file> element in your form */),
@@ -182,14 +217,14 @@ app.post(
             )
           ) {
             const uploaded = await bucket.upload(tempPath, {
-              // Support for HTTP requests made with `Accept-Encoding: gzip`
+            // Support for HTTP requests made with `Accept-Encoding: gzip`
               gzip: true,
               // By setting the option `destination`, you can change the name of the
               // object you are uploading to a bucket.
               metadata: {
-                // Enable long-lived HTTP caching headers
-                // Use only if the contents of the file will never change
-                // (If the contents will change, use cacheControl: 'no-cache')
+              // Enable long-lived HTTP caching headers
+              // Use only if the contents of the file will never change
+              // (If the contents will change, use cacheControl: 'no-cache')
                 cacheControl: 'public, max-age=31536000',
               },
             });
@@ -199,7 +234,7 @@ app.post(
               expires: '03-17-2125',
             };
             const url = await file.getSignedUrl(options);
-            const decoded = jwt.verify(req.body.user, 'johndenverfucks');
+            const decoded = jwt.verify(req.body.user, tokenKey);
             const title = req.body.title;
             const desc = req.body.desc;
             console.log(req.body);
